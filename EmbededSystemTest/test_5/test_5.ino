@@ -1,33 +1,45 @@
-//5번
-const int BIT_US = 104; // 9600bps
-#define TX_HIGH() (PORTB |=  (1 << PB0))
-#define TX_LOW()  (PORTB &= ~(1 << PB0))
+// ===============================
+// 비트뱅 UART 송신 + RX 검증
+// 송신 : D8 (PB0, Bit-bang)
+// 수신 : D0 (Hardware UART)
+// Baudrate : 9600
+// ===============================
 
-char sendChars[] = {'a', 'j', 's', 'R'}; // 반복할 문자들
+const int BIT_US = 104;   // 9600bps 기준 1비트 시간
+
+#define TX_HIGH() (PORTB |=  (1 << PB0))   // D8 HIGH
+#define TX_LOW()  (PORTB &= ~(1 << PB0))   // D8 LOW
+
+// 테스트 문자 배열
+char sendChars[] = { 'a', 'j', 's', 'R' };
 int indexChar = 0;
 
 void setup() {
-  DDRB |= (1 << PB0);   // D8을 출력으로 설정
-  TX_HIGH();            // idle 상태 HIGH
-  Serial.begin(9600);   // 시리얼 모니터용 (D0, D1 하드웨어 UART)
+  // D8 출력 설정
+  DDRB |= (1 << PB0);
+
+  // UART idle = HIGH
+  TX_HIGH();
+
+  // RX 확인용 하드웨어 UART
+  Serial.begin(9600);
 }
 
 void loop() {
   char c = sendChars[indexChar];
 
-  // D8에서 Bit-bang 송신
+  // 🔹 1) 비트뱅으로만 송신 (D8)
   sendChar(c);
-
-  // 하드웨어 시리얼 송신 (D0,D1)
-  Serial.write(c);
 
   // 다음 문자로 이동
   indexChar++;
-  if (indexChar >= sizeof(sendChars)) indexChar = 0; // 배열 반복
+  if (indexChar >= sizeof(sendChars)) {
+    indexChar = 0;
+  }
 
-  delay(500);
+  delay(500);   // 송신 간격 (관찰용)
 
-  // UART 수신 확인
+  // 🔹 2) RX로 실제 수신된 데이터만 출력
   if (Serial.available() > 0) {
     char r = Serial.read();
     Serial.print("Received: ");
@@ -35,20 +47,28 @@ void loop() {
   }
 }
 
+// ===================================
+// 비트뱅 UART 송신 함수 (8N1)
+// ===================================
 void sendChar(char c) {
-  // 스타트 비트 (Low)
+
+  // Start Bit (LOW)
   TX_LOW();
   delayMicroseconds(BIT_US);
 
-  // 데이터 비트 (LSB first)
+  // Data Bits (LSB First)
   for (int i = 0; i < 8; i++) {
-    if (c & 0x01) TX_HIGH();
-    else TX_LOW();
+    if (c & 0x01) {
+      TX_HIGH();
+    } else {
+      TX_LOW();
+    }
+
     c >>= 1;
     delayMicroseconds(BIT_US);
   }
 
-  // 스톱 비트 (High)
+  // Stop Bit (HIGH)
   TX_HIGH();
   delayMicroseconds(BIT_US);
 }
